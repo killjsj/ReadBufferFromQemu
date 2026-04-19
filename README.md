@@ -1,56 +1,115 @@
-# godot-cpp template
-This repository serves as a quickstart template for GDExtension development with Godot 4.0+.
+# ReadBufferFromQEMU
+Warn:This Readme is made by ai
+Warn:You need to use a speical qemu located at:`https://github.com/killjsj/qemu` to have a ui called `sharedbuffer`
+A Godot 4.x C++ extension that captures QEMU virtual machine screen output via shared memory.
 
-## Contents
-* Preconfigured source files for C++ development of the GDExtension ([src/](./src/))
-* An empty Godot project in [project/](./project), to test the GDExtension
-* godot-cpp as a submodule (`godot-cpp/`)
-* GitHub Issues template ([.github/ISSUE_TEMPLATE.yml](./.github/ISSUE_TEMPLATE.yml))
-* GitHub CI/CD workflows to publish your library packages when creating a release ([.github/workflows/builds.yml](./.github/workflows/builds.yml))
-* An SConstruct file with various functions, such as boilerplate for [Adding documentation](https://docs.godotengine.org/en/stable/tutorials/scripting/cpp/gdextension_docs_system.html)
+## Features
 
-## Usage - Template
+- Reads screen buffer directly from QEMU's shared memory display
+- Supports multiple virtual screens
+- Cross-platform (Windows, Linux)
+- Real-time frame updating via threading
+- RGBA format conversion for various pixel formats
 
-To use this template, log in to GitHub and click the green "Use this template" button at the top of the repository page. This will let you create a copy of this repository with a clean git history.
+## Requirements
 
-To get started with your new GDExtension, do the following:
+- Godot 4.x with C++ support
+- QEMU built with `--display sharedbuffer` support
+- For Windows: Visual Studio 2017+ or MinGW-w64
+- For Linux: GCC with pthread support
 
-* clone your repository to your local computer
-* initialize the godot-cpp git submodule via `git submodule update --init`
-* change the name of the compiled library file inside the [SConstruct](./SConstruct) file by modifying the `libname` string.
-  * change the paths of the to be loaded library name inside the [project/bin/example.gdextension](./project/bin/example.gdextension) file, by replacing `EXTENSION-NAME` with the name you chose for `libname`.
-* change the `entry_symbol` string inside [project/bin/example.gdextension](./project/bin/example.gdextension) file.
-  * rename the `example_library_init` function in [src/register_types.cpp](./src/register_types.cpp) to the same name you chose for `entry_symbol`.
-* change the name of the `project/bin/example.gdextension` file
-
-Now, you can build the project with the following command:
-
-```shell
-scons
-```
-
-If the build command worked, you can test it with the [project](./project) project. Import it into Godot, open it, and launch the main scene. You should see it print the following line in the console:
+## Project Structure
 
 ```
-Type: 24
+ReadBufferFromQemu/
+├── src/
+│   ├── read.h          # Main ReaderClass header
+│   ├── read.cpp       # Implementation
+│   ├── utils.h       # Shared memory utilities
+│   ├── utils.cpp     # QEMU process management
+│   ├── lock.h       # Cross-platform mutex
+│   ├── structDefine.h # Shared memory structures
+│   └── register_types.cpp # Godot extension registration
+├── project/          # Godot test project
+│   └── node_2d.gd   # Demo usage script
+└── bin/             # Compiled libraries
 ```
 
-### Configuring an IDE
-You can develop your own extension with any text editor and by invoking scons on the command line, but if you want to work with an IDE (Integrated Development Environment), you can use a compilation database file called `compile_commands.json`. Most IDEs should automatically identify this file, and self-configure appropriately.
-To generate the database file, you can run one of the following commands in the project root directory:
-```shell
-# Generate compile_commands.json while compiling
-scons compiledb=yes
+## Usage
 
-# Generate compile_commands.json without compiling
-scons compiledb=yes compile_commands.json
+### GDScript Usage
+
+```gdscript
+extends ReaderClass
+
+var screen_sprites: Array[Sprite2D] = []
+
+func _ready() -> void:
+    startMachine(['-m', '2048'])
+
+func _process(_delta: float) -> void:
+    sync_connection(_delta)
+    var count = get_screen_count()
+
+    if count > 0 and screen_sprites.size() != count:
+        _setup_sprites(count)
+
+    for i in range(screen_sprites.size()):
+        if get_usable(i):
+            screen_sprites[i].texture = get_texture(i)
 ```
 
-## Usage - Actions
+### API Reference
 
-This repository comes with continuous integration (CI) through a GitHub action that tests building the GDExtension.
-It triggers automatically for each pushed change. You can find and edit it in [builds.yml](.github/workflows/ci.yml).
+| Method | Description |
+|--------|------------|
+| `startMachine(args: PackedStringArray)` | Start QEMU with given arguments |
+| `stopMachine()` | Stop the QEMU process |
+| `sync_connection(delta: float)` | Sync frame data to textures |
+| `get_screen_count() -> int` | Get number of screens |
+| `get_usable(index: int) -> bool` | Check if screen is available |
+| `get_width(index: int) -> int` | Get screen width |
+| `get_height(index: int) -> int` | Get screen height |
+| `get_texture(index: int) -> ImageTexture` | Get screen texture |
 
-There is also a workflow ([make_build.yml](.github/workflows/make_build.yml)) that builds the GDExtension for all supported platforms that you can use to create releases.
-You can trigger this workflow manually from the `Actions` tab on GitHub.
-After it is complete, you can find the file `godot-cpp-template.zip` in the `Artifacts` section of the workflow run.
+## Building
+
+### Windows
+
+```bash
+scons platform=windows target=template_debug
+```
+
+### Linux
+
+```bash
+scons platform=linux target=template_debug
+```
+
+## How It Works
+
+1. **QEMU Connection**: Spawns QEMU with `--display sharedbuffer,id=sharedbuf_N`
+2. **Shared Memory**: Connects to control block (`/QemuCtrl_sharedbuf_N`) and data buffers
+3. **Threaded Reading**: Background thread reads pixel data from shared memory
+4. **Format Conversion**: Converts various PIXMAN formats to RGBA8
+5. **Texture Update**: Main thread syncs data to Godot textures
+
+### Multi-Screen Support
+
+Each virtual screen has its own:
+- Shared memory mapping
+- Lock (mutex) for synchronization
+- Double buffering (A/B buffers)
+- Independent dimensions
+
+## Supported Pixel Formats
+
+- `PIXMAN_a8r8g8b8` / `PIXMAN_x8r8g8b8`
+- `PIXMAN_a8b8g8r8` / `PIXMAN_x8b8g8r8`
+- `PIXMAN_b8g8r8a8` / `PIXMAN_b8g8r8x8`
+- `PIXMAN_r8g8b8a8` / `PIXMAN_r8g8b8x8`
+- `PIXMAN_rgba_float` (96bpp/128bpp)
+
+## License
+
+MIT
