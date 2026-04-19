@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://mo5b3mikuc38"]
+
+[ext_resource type="Script" uid="uid://bq343vf744845" path="res://node_2d.gd" id="1_wtcfe"]
+
+[node name="Node2D" type="Node2D" unique_id=299103496]
+
+[node name="ReaderClass" type="ReaderClass" parent="." unique_id=2009156249]
+script = ExtResource("1_wtcfe")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1987068983]
+position = Vector2(306, 202)
+zoom = Vector2(0.75, 0.75)
