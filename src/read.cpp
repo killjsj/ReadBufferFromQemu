@@ -127,6 +127,10 @@ void ReaderClass::updatemessgae() {
 			int safe_format = state.ImageFormat;
 			int frame_size = safe_w * safe_h * 4;
 			if (LockScreen(ss, false, 1)) {
+				if(!ss->isNewFrame){
+					UnlockScreen(ss, false);
+					continue;
+				}
 				PackedByteArray temp_buffer;
 				temp_buffer.resize(frame_size);
 
@@ -195,6 +199,7 @@ void ReaderClass::updatemessgae() {
 				} else {
 					ss->ClientReadingA = false;
 				}
+				ss->isNewFrame = false;
 				MemsBar();
 				UnlockScreen(ss, false);
 				{
@@ -244,12 +249,24 @@ void ReaderClass::startMachine(TypedArray<String> args) {
 		for (int i = 0; i < args.size(); i++) {
 			qemu_args.push_back(args[i].operator String().utf8().get_data());
 		}
+		std::string exe_path;
+		std::string arch = Engine.get_architecture_name().utf8().ptr();
 		#ifdef _WIN32
-		qemu_conn = startQemuAndConnectToBuffer("D:\\t\\qemu\\build-win\\fin\\qemu-system-x86_64.exe", qemu_args);
+			std::string exe_ext = ".exe";
 		#else
-		qemu_conn = startQemuAndConnectToBuffer("/mnt/d/t/qemu/build/qemu-system-x86_64", qemu_args);
-
+			std::string exe_ext = "";
 		#endif
+		if (!Engine::get_singleton()->is_editor_hint()) {
+			godot::String exe_path_Godot = OS.get_executable_path().get_base_dir();
+			exe_path_Godot = exe_path_Godot.path_join("bin").path_join("qemu-system-" + arch + exe_ext);
+			exe_path = exe_path_Godot.utf8().ptr();
+		}else{
+			godot::String project_path_godot = ProjectSettings::get_singleton()->globalize_path("res://");
+			project_path_godot = project_path_godot.path_join("bin").path_join("qemu-system-" + arch + exe_ext);
+			exe_path = project_path_godot.utf8().ptr();
+		}
+		godot::UtilityFunctions::print("guess qemu path:", exe_path_Godot);
+		qemu_conn = startQemuAndConnectToBuffer(exe_path, qemu_args);
 		if (qemu_conn.haveId) {
 			current_qemu_id = qemu_conn.id;
 			std::stringstream ss;

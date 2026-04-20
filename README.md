@@ -1,6 +1,9 @@
 # ReadBufferFromQEMU
-Warn:This Readme is made by ai  
+Warn:This Readme is made by ai
 Warn:You need to use a speical qemu located at:`https://github.com/killjsj/qemu` to have a ui called `sharedbuffer`
+
+path for place custom qemu: in build version, create a folder called 'bin' in the game folder and throw all qemu build inside,
+in editor,create a folder called 'bin' in the project folder and throw all qemu build inside
 
 A Godot 4.x C++ extension that captures QEMU virtual machine screen output via shared memory.
 

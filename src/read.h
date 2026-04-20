@@ -13,6 +13,7 @@
 #include <exception>
 #include <godot_cpp/classes/thread.hpp>
 #include <sstream>
+#include <string>
 #include "utils.h"
 #include <string>
 #include "lock.h"
