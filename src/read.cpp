@@ -1,5 +1,4 @@
 #include "read.h"
-#include <godot_cpp/classes/project_settings.hpp>
 
 // #include "godot_cpp/"
 
@@ -268,7 +267,7 @@ void ReaderClass::startMachine(TypedArray<String> args) {
 			project_path_godot = project_path_godot.path_join("bin").path_join(qemu_name);
 			exe_path = project_path_godot.utf8().ptr();
 		}
-		godot::UtilityFunctions::print("guess qemu path:", exe_path);
+		godot::UtilityFunctions::print("guess qemu path:", exe_path.c_str());
 		qemu_conn = startQemuAndConnectToBuffer(exe_path, qemu_args);
 		if (qemu_conn.haveId) {
 			current_qemu_id = qemu_conn.id;

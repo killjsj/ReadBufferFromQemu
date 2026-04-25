@@ -10,8 +10,9 @@
 #include "godot_cpp/classes/engine.hpp"
 #include "godot_cpp/classes/os.hpp"
 #include "godot_cpp/variant/utility_functions.hpp"
-#include <exception>
+#include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/classes/thread.hpp>
+#include <exception>
 #include <sstream>
 #include <string>
 #include "utils.h"
