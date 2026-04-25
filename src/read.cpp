@@ -256,8 +256,9 @@ void ReaderClass::startMachine(TypedArray<String> args) {
 		#else
 			std::string exe_ext = "";
 		#endif
-		if (!godot::Engine::get_singleton()->is_editor_hint()) {
+		if (!godot::Engine::get_singleton()->is_embedded_in_editor()) {
 			godot::String exe_path_Godot = godot::OS::get_singleton()->get_executable_path().get_base_dir();
+			godot::UtilityFunctions::print("exe_path_Godot:", exe_path_Godot);
 			godot::String qemu_name = godot::String("qemu-system-") + arch.c_str() + exe_ext.c_str();
 			exe_path_Godot = exe_path_Godot.path_join("bin").path_join(qemu_name);
 			exe_path = exe_path_Godot.utf8().ptr();
@@ -266,6 +267,7 @@ void ReaderClass::startMachine(TypedArray<String> args) {
 			godot::String qemu_name = godot::String("qemu-system-") + arch.c_str() + exe_ext.c_str();
 			project_path_godot = project_path_godot.path_join("bin").path_join(qemu_name);
 			exe_path = project_path_godot.utf8().ptr();
+			godot::UtilityFunctions::print("project_path_godot:", project_path_godot);
 		}
 		godot::UtilityFunctions::print("guess qemu path:", exe_path.c_str());
 		qemu_conn = startQemuAndConnectToBuffer(exe_path, qemu_args);
