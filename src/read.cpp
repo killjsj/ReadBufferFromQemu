@@ -1,4 +1,5 @@
 #include "read.h"
+#include <godot_cpp/classes/project_settings.hpp>
 
 // #include "godot_cpp/"
 
@@ -21,7 +22,7 @@ void ReaderClass::_bind_methods() {
 }
 void ReaderClass::_notification(int p_what) {
 	// Prevents this from running in the editor, only during game mode. In Godot 4.3+ use Runtime classes.
-	if (Engine::get_singleton()->is_editor_hint()) {
+	if (godot::Engine::get_singleton()->is_editor_hint()) {
 		return;
 	}
 
@@ -250,22 +251,24 @@ void ReaderClass::startMachine(TypedArray<String> args) {
 			qemu_args.push_back(args[i].operator String().utf8().get_data());
 		}
 		std::string exe_path;
-		std::string arch = Engine.get_architecture_name().utf8().ptr();
+		std::string arch = godot::Engine::get_singleton()->get_architecture_name().utf8().ptr();
 		#ifdef _WIN32
 			std::string exe_ext = ".exe";
 		#else
 			std::string exe_ext = "";
 		#endif
-		if (!Engine::get_singleton()->is_editor_hint()) {
-			godot::String exe_path_Godot = OS.get_executable_path().get_base_dir();
-			exe_path_Godot = exe_path_Godot.path_join("bin").path_join("qemu-system-" + arch + exe_ext);
+		if (!godot::Engine::get_singleton()->is_editor_hint()) {
+			godot::String exe_path_Godot = godot::OS::get_singleton()->get_executable_path().get_base_dir();
+			godot::String qemu_name = godot::String("qemu-system-") + arch.c_str() + exe_ext.c_str();
+			exe_path_Godot = exe_path_Godot.path_join("bin").path_join(qemu_name);
 			exe_path = exe_path_Godot.utf8().ptr();
 		}else{
-			godot::String project_path_godot = ProjectSettings::get_singleton()->globalize_path("res://");
-			project_path_godot = project_path_godot.path_join("bin").path_join("qemu-system-" + arch + exe_ext);
+			godot::String project_path_godot = godot::ProjectSettings::get_singleton()->globalize_path("res://");
+			godot::String qemu_name = godot::String("qemu-system-") + arch.c_str() + exe_ext.c_str();
+			project_path_godot = project_path_godot.path_join("bin").path_join(qemu_name);
 			exe_path = project_path_godot.utf8().ptr();
 		}
-		godot::UtilityFunctions::print("guess qemu path:", exe_path_Godot);
+		godot::UtilityFunctions::print("guess qemu path:", exe_path);
 		qemu_conn = startQemuAndConnectToBuffer(exe_path, qemu_args);
 		if (qemu_conn.haveId) {
 			current_qemu_id = qemu_conn.id;
