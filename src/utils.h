@@ -17,9 +17,23 @@
 #include "structDefine.h"
 #include <vector>
 #include <thread>
+enum ConnectionType {
+    CONN_NONE,
+    CONN_SINGLE_SCREEN,
+    CONN_BUFFER_STRUCT
+};
 
-static int CurrentID = 0;
+struct SharedBufferConnection {
+    HANDLE h;
+    ConnectionType type;
 
+    SingleScreen *SS;
+    BufferStruct *BS;
+    void* ptr;
+
+    int id = -1;
+    bool haveId = false; // haveId 也不要和 id 放进 union
+};
 #ifdef _WIN32
 static std::map<int,DWORD> processes;
 #else
@@ -33,4 +47,4 @@ BufferStruct* wait_for_control_shm(const char* ctrl_name, HANDLE& hMap, int time
 void disconnect_shm(void *ptr, HANDLE hMap, size_t size = 0);
 void shutdownAllQemu();
 bool isQemuRunning(int process_index);
-SharedBufferConnection startQemuAndConnectToBuffer(std::string qemuPath, std::vector<std::string> args);
+SharedBufferConnection startQemuAndConnectToBuffer(std::string qemuPath, std::vector<std::string> args,int session_id);

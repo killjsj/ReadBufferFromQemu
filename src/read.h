@@ -18,6 +18,7 @@
 #include "utils.h"
 #include <string>
 #include "lock.h"
+#include <atomic>
 #include <vector>
 #define PIXMAN_FORMAT(bpp,type,a,r,g,b)	(((bpp) << 24) |  \
 					 ((type) << 16) | \
@@ -178,6 +179,7 @@ private:
     // --- 新增：使用 vector 动态存储多个屏幕的状态 ---
     std::vector<ScreenState> screens_state;
 	Ref<Mutex> screens_mutex;
+    uint32_t current_button_state;        // 跟踪按钮状态
 public:
     ReaderClass();
     ~ReaderClass() override;
@@ -196,4 +198,8 @@ public:
     Ref<ImageTexture> get_texture(int index) const;
 	void updatemessgae();
     void sync_connection(double delta);
+	    void send_key_event(int godot_key, bool pressed);
+    void send_mouse_button_state(uint32_t button_state);
+    void send_mouse_motion(int x, int y, int godot_w, int godot_h);
+	void send_mouse_wheel(int delta_y);
 };

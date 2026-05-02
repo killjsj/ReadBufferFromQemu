@@ -1,5 +1,31 @@
 #include "read.h"
+#include "mapper.hpp"
+#include "godot_cpp/classes/file_access.hpp"
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <semaphore.h>
+#endif
+#include <atomic>
+#ifdef _WIN32
+// 模拟 __atomic_load_n(p, __ATOMIC_ACQUIRE)
+static inline uint32_t atomic_load_acquire(const uint32_t *ptr) {
+    return *(const volatile uint32_t *)ptr;
+}
 
+// 原子写 + 释放语义（使用 InterlockedExchange 自带全屏障）
+static inline void atomic_store_release(uint32_t *ptr, uint32_t val) {
+    InterlockedExchange((volatile LONG *)ptr, (LONG)val);
+}
+#else
+// Linux 下继续使用 GCC 内建函数（原实现即可）
+static inline uint32_t atomic_load_acquire(const uint32_t *ptr) {
+    return __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
+}
+static inline void atomic_store_release(uint32_t *ptr, uint32_t val) {
+    __atomic_store_n(ptr, val, __ATOMIC_RELEASE);
+}
+#endif
 // #include "godot_cpp/"
 
 ReaderClass::ReaderClass() {}
@@ -18,6 +44,73 @@ void ReaderClass::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_height", "index"), &ReaderClass::get_height);
 	ClassDB::bind_method(D_METHOD("get_texture", "index"), &ReaderClass::get_texture);
 	ClassDB::bind_method(D_METHOD("threaded_function"), &ReaderClass::updatemessgae);
+	ClassDB::bind_method(D_METHOD("send_key_event", "godot_key", "pressed"), &ReaderClass::send_key_event);
+	ClassDB::bind_method(D_METHOD("send_mouse_button_state", "button_state"), &ReaderClass::send_mouse_button_state);
+	ClassDB::bind_method(D_METHOD("send_mouse_motion", "x", "y", "godot_w", "godot_h"), &ReaderClass::send_mouse_motion);
+	ClassDB::bind_method(D_METHOD("send_mouse_wheel", "delta_y"), &ReaderClass::send_mouse_wheel);
+}
+void ReaderClass::send_key_event(int godot_key, bool pressed) {
+    if (!qemu_conn.BS) return;
+    int qcode = map_godot_key_to_qemu_qcode(godot_key);
+    if (qcode == Q_KEY_CODE_UNMAPPED) return;
+
+    BufferStruct* bs = qemu_conn.BS;
+    uint32_t writer = atomic_load_acquire(&bs->input_write_idx);
+    uint32_t reader = atomic_load_acquire(&bs->input_read_idx);
+    GodotInputEvent& ev = bs->input_events[writer & (INPUT_RING_SIZE - 1)];
+    ev.type = INPUT_EVENT_KEY;
+    ev.console_index = 0;
+    ev.keycode = qcode;
+    ev.pressed = pressed;
+    atomic_store_release(&bs->input_write_idx, writer + 1);
+}
+void ReaderClass::send_mouse_button_state(uint32_t button_state) {
+    if (!qemu_conn.BS) return;
+
+    BufferStruct* bs = qemu_conn.BS;
+    uint32_t writer = atomic_load_acquire(&bs->input_write_idx);
+    uint32_t reader = atomic_load_acquire(&bs->input_read_idx);
+    if ((writer - reader) >= INPUT_RING_SIZE) return;
+
+    GodotInputEvent& ev = bs->input_events[writer & (INPUT_RING_SIZE - 1)];
+    ev.type = INPUT_EVENT_MOUSE_BUTTON_STATE;
+    ev.console_index = 0;
+    ev.button_state = button_state;
+
+    atomic_store_release(&bs->input_write_idx, writer + 1);
+}
+void ReaderClass::send_mouse_motion(int x, int y, int godot_w, int godot_h) {
+    if (!qemu_conn.BS) return;
+
+    BufferStruct* bs = qemu_conn.BS;
+    uint32_t writer = atomic_load_acquire(&bs->input_write_idx);
+    uint32_t reader = atomic_load_acquire(&bs->input_read_idx);
+    if ((writer - reader) >= INPUT_RING_SIZE) return;
+
+    GodotInputEvent& ev = bs->input_events[writer & (INPUT_RING_SIZE - 1)];
+    ev.type = INPUT_EVENT_MOUSE_MOVE;
+    ev.console_index = 0;
+    ev.mouse_x = x;
+    ev.mouse_y = y;
+    ev.godot_w = godot_w;
+    ev.godot_h = godot_h;
+
+    atomic_store_release(&bs->input_write_idx, writer + 1);
+}
+void ReaderClass::send_mouse_wheel(int delta_y) {
+    if (!qemu_conn.BS) return;
+    BufferStruct* bs = qemu_conn.BS;
+
+    uint32_t writer = atomic_load_acquire(&bs->input_write_idx);
+    uint32_t reader = atomic_load_acquire(&bs->input_read_idx);
+    if ((writer - reader) >= INPUT_RING_SIZE) return;  // 满，丢弃
+
+    GodotInputEvent& ev = bs->input_events[writer & (INPUT_RING_SIZE - 1)];
+    ev.type = INPUT_EVENT_MOUSE_WHEEL;
+    ev.console_index = 0;
+    ev.wheel_delta = delta_y;   // 正负区分方向
+
+    atomic_store_release(&bs->input_write_idx, writer + 1);
 }
 void ReaderClass::_notification(int p_what) {
 	// Prevents this from running in the editor, only during game mode. In Godot 4.3+ use Runtime classes.
@@ -235,6 +328,33 @@ bool ReaderClass::get_usable(int id) {
 	// 即使 data_ptr 暂时为空，只要宽高有效，就认为可用（可以显示旧帧或占位）
 	return (state.data_ptr != nullptr) || (state.width > 0 && state.height > 0);
 }
+int session_id = 0;
+
+void _initialize_session_id() {
+	// 存储路径：user:// 永远指向程序专属的可写目录
+	godot::String path = "user://last_qemu_id.dat";
+
+	// 1. 尝试读取
+	if (godot::FileAccess::file_exists(path)) {
+		godot::Ref<godot::FileAccess> f = godot::FileAccess::open(path, godot::FileAccess::READ);
+		if (f.is_valid()) {
+			session_id = f->get_32(); // 读取上一次的 ID
+			f->close();
+		}
+	}
+
+	// 2. 自增
+	session_id++;
+
+	// 3. 立即写回，确保下次启动拿到的是新值
+	godot::Ref<godot::FileAccess> f = godot::FileAccess::open(path, godot::FileAccess::WRITE);
+	if (f.is_valid()) {
+		f->store_32(session_id);
+		f->close();
+	}
+
+	godot::UtilityFunctions::print("QEMU Session Started. Unique ID: ", session_id);
+}
 void ReaderClass::_ready() {
 }
 void ReaderClass::_exit_tree() {
@@ -270,7 +390,7 @@ void ReaderClass::startMachine(TypedArray<String> args) {
 			godot::UtilityFunctions::print("project_path_godot:", project_path_godot);
 		}
 		godot::UtilityFunctions::print("guess qemu path:", exe_path.c_str());
-		qemu_conn = startQemuAndConnectToBuffer(exe_path, qemu_args);
+		qemu_conn = startQemuAndConnectToBuffer(exe_path, qemu_args, session_id);
 		if (qemu_conn.haveId) {
 			current_qemu_id = qemu_conn.id;
 			std::stringstream ss;

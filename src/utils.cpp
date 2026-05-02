@@ -29,7 +29,7 @@ BufferStruct *connect_to_control_shm(const char *name, HANDLE &hMap) {
         godot::UtilityFunctions::print("shm_open failed! errno: ", errno, " name: ", name);
 		return nullptr;
 	}
-	
+
 	hMap = fd;
 	// 修正：映射 statbuf.st_size 而不是 sizeof(BufferStruct)
 	ptr = mmap(NULL, statbuf.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -136,7 +136,6 @@ BufferStruct* wait_for_control_shm(const char* ctrl_name, HANDLE& hMap, int time
 void shutdownQemuID(int id) {
     auto it = processes.find(id);
     if (it == processes.end()) return;
-
 #ifdef _WIN32
     DWORD pid = it->second;
 
@@ -198,13 +197,11 @@ bool isQemuRunning(int process_index) {
     return false;
 #endif
 }
-SharedBufferConnection startQemuAndConnectToBuffer(std::string qemuPath, std::vector<std::string> args) {
+SharedBufferConnection startQemuAndConnectToBuffer(std::string qemuPath, std::vector<std::string> args,int session_id = 0) {
     SharedBufferConnection conn;
     conn.h = 0;
     conn.ptr = nullptr;
-    // 1. 生成唯一 ID
-    int id_num = CurrentID++;
-    std::string id_str = "sharedbuf_" + std::to_string(id_num);
+    std::string id_str = "sharedbuf_" + std::to_string(session_id);
     std::string ctrl_name = "/QemuCtrl_" + id_str;
 
     // 2. 构造 QEMU 命令行参数
@@ -271,9 +268,15 @@ SharedBufferConnection startQemuAndConnectToBuffer(std::string qemuPath, std::ve
         CloseHandle(hWritePipe);
         return conn;
     }
+	HANDLE hJob = CreateJobObject(NULL, NULL);
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli = { 0 };
+	jeli.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+	SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, &jeli, sizeof(jeli));
 
+	// 启动 QEMU 后将进程句柄加入 Job
+	AssignProcessToJobObject(hJob, pi.hProcess);
     DWORD pid = pi.dwProcessId;
-    processes.insert_or_assign(id_num, pid);
+    processes.insert_or_assign(session_id, pid);
 
     // 关闭不再需要的句柄
     CloseHandle(pi.hThread);
@@ -305,7 +308,7 @@ SharedBufferConnection startQemuAndConnectToBuffer(std::string qemuPath, std::ve
     conn.h = hMap;
     conn.BS = bs;
 	conn.type = CONN_BUFFER_STRUCT;
-	conn.id = id_num;
+	conn.id = session_id;
 	conn.haveId = true;
     return conn;
 }

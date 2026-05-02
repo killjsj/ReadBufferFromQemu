@@ -8,5 +8,5 @@
 script = ExtResource("1_wtcfe")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1987068983]
-position = Vector2(306, 202)
-zoom = Vector2(0.75, 0.75)
+position = Vector2(311, 250)
+zoom = Vector2(0.72, 0.72)
