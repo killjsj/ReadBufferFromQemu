@@ -1,12 +1,15 @@
 extends ReaderClass
-
+var bgr_shader = preload("res://new_shader.gdshader")
 # 用于存放动态生成的 Sprite2D 节点
 var screen_sprites: Array[Sprite2D] = []
-
+@export var sci:Script
 func _ready() -> void:
 	print("aaa")
 	# 启动 QEMU
-	startMachine(['-m','8096',"--cdrom","D:\\ubuntu-24.04.3-live-server-amd64.iso"])
+	startMachine(['-m','8096',"--cdrom","C:\\Users\\kill\\Downloads\\debian-13.4.0-amd64-DVD-1.iso",
+	"",
+	"-device", "usb-ehci,id=usb",
+	"-device", "usb-tablet,bus=usb.0",])
 
 func _process(_delta: float) -> void:
 	self.sync_connection(_delta)
@@ -41,12 +44,15 @@ func _setup_sprites(count: int) -> void:
 
 	for i in range(count):
 		var new_sprite = Sprite2D.new()
+		new_sprite.set_script(sci)
 		add_child(new_sprite)
-
+		new_sprite.rd = self
 		# 获取当前屏幕的宽高
 		var w = get_width(i)
 		var h = get_height(i)
-
+		var mat = ShaderMaterial.new()
+		mat.shader = bgr_shader
+		new_sprite.material = mat
 		# 居中设置
 		new_sprite.centered = true
 
@@ -59,41 +65,3 @@ func _setup_sprites(count: int) -> void:
 		current_x_offset += w + 16 # 20 是屏幕之间的间距
 		#new_sprite.scale = Vector2(0.8,0.8)
 		screen_sprites.append(new_sprite)
-
-var button_state: int = 0
-
-func _input(event):
-	if event is InputEventKey:
-		send_key_event(event.keycode, event.pressed)
-
-	elif event is InputEventMouseButton:
-		match event.button_index:
-			MOUSE_BUTTON_WHEEL_UP:
-				send_mouse_wheel(1)
-			MOUSE_BUTTON_WHEEL_DOWN:
-				send_mouse_wheel(-1)
-			MOUSE_BUTTON_WHEEL_LEFT:
-				pass  # 暂不支持
-			MOUSE_BUTTON_WHEEL_RIGHT:
-				pass
-			_:
-				# 将 Godot 按钮索引转换为 QEMU 的位掩码
-				var mask = 0
-				match event.button_index:
-					1: mask = 1 << 0   # 左键
-					2: mask = 1 << 1   # 中键
-					3: mask = 1 << 2   # 右键
-					# 可扩展更多按钮
-				if mask == 0: return
-
-				if event.pressed:
-					button_state |= mask
-				else:
-					button_state &= ~mask
-				send_mouse_button_state(button_state)
-
-	elif event is InputEventMouseMotion:
-		var vp = get_viewport().get_visible_rect()
-		send_mouse_motion(event.position.x, event.position.y,
-						  int(vp.size.x), int(vp.size.y))
-		

@@ -1,12 +1,13 @@
 [gd_scene format=3 uid="uid://mo5b3mikuc38"]
 
 [ext_resource type="Script" uid="uid://bq343vf744845" path="res://node_2d.gd" id="1_wtcfe"]
+[ext_resource type="Script" uid="uid://bnhcjlv6jdtts" path="res://sp.gd" id="2_0e48y"]
 
 [node name="Node2D" type="Node2D" unique_id=299103496]
 
 [node name="ReaderClass" type="ReaderClass" parent="." unique_id=2009156249]
 script = ExtResource("1_wtcfe")
+sci = ExtResource("2_0e48y")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1987068983]
-position = Vector2(311, 250)
 zoom = Vector2(0.72, 0.72)

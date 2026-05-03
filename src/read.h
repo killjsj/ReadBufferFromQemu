@@ -146,7 +146,8 @@ struct ScreenState {
     uint8_t* data_ptr = nullptr;
     uint32_t dataA_offset;    /* 始终为 0 */
     uint32_t dataB_offset;
-
+	bool is_first_frame = true;
+	bool isNotGraphic = false;  // 新增：标记是否为非图形屏幕
     HANDLE hMap = 0;
     Ref<Image> image;
     Ref<ImageTexture> texture;
@@ -180,6 +181,14 @@ private:
     std::vector<ScreenState> screens_state;
 	Ref<Mutex> screens_mutex;
     uint32_t current_button_state;        // 跟踪按钮状态
+	PackedByteArray temp_buffer;
+
+#ifdef _WIN32
+    HANDLE input_sem = NULL;
+#else
+    sem_t *input_sem = nullptr;
+#endif
+	void notify_qemu_input();
 public:
     ReaderClass();
     ~ReaderClass() override;
@@ -199,7 +208,7 @@ public:
 	void updatemessgae();
     void sync_connection(double delta);
 	    void send_key_event(int godot_key, bool pressed);
-    void send_mouse_button_state(uint32_t button_state);
+    void send_mouse_button_state(int x, int y, uint32_t button_state);
     void send_mouse_motion(int x, int y, int godot_w, int godot_h);
 	void send_mouse_wheel(int delta_y);
 };
